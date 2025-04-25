@@ -27,6 +27,18 @@ export const GameSetup = ({ onStart }: GameSetupProps) => {
     });
   };
 
+  // Validate if all required player names are provided
+  const arePlayersValid = () => {
+    if (matchType === 'singles') {
+      return players[0].trim() !== '' && players[1].trim() !== '';
+    } else {
+      return players[0].trim() !== '' && 
+             players[1].trim() !== '' && 
+             teamTwoPlayers[0].trim() !== '' && 
+             teamTwoPlayers[1].trim() !== '';
+    }
+  };
+
   return (
     <Card className="w-full max-w-md p-6 space-y-6">
       <h2 className="text-2xl font-bold text-center mb-6">New Match Setup</h2>
@@ -56,13 +68,13 @@ export const GameSetup = ({ onStart }: GameSetupProps) => {
             </h3>
             <div className="space-y-2">
               <Input
-                placeholder="Player 1"
+                placeholder={matchType === 'singles' ? 'Player 1' : 'Team 1 - Player 1 (Right Court)'}
                 value={players[0]}
                 onChange={(e) => setPlayers([e.target.value, players[1]])}
               />
               {matchType === 'doubles' && (
                 <Input
-                  placeholder="Player 2"
+                  placeholder="Team 1 - Player 2 (Left Court)"
                   value={players[1]}
                   onChange={(e) => setPlayers([players[0], e.target.value])}
                 />
@@ -83,12 +95,12 @@ export const GameSetup = ({ onStart }: GameSetupProps) => {
             ) : (
               <div className="space-y-2">
                 <Input
-                  placeholder="Player 3"
+                  placeholder="Team 2 - Player 1 (Right Court)"
                   value={teamTwoPlayers[0]}
                   onChange={(e) => setTeamTwoPlayers([e.target.value, teamTwoPlayers[1]])}
                 />
                 <Input
-                  placeholder="Player 4"
+                  placeholder="Team 2 - Player 2 (Left Court)"
                   value={teamTwoPlayers[1]}
                   onChange={(e) => setTeamTwoPlayers([teamTwoPlayers[0], e.target.value])}
                 />
@@ -100,9 +112,7 @@ export const GameSetup = ({ onStart }: GameSetupProps) => {
         <Button 
           className="w-full" 
           onClick={handleStart}
-          disabled={matchType === 'singles' 
-            ? !players[0] || !players[1]
-            : !players[0] || !players[1] || !teamTwoPlayers[0] || !teamTwoPlayers[1]}
+          disabled={!arePlayersValid()}
         >
           Start Match
         </Button>
