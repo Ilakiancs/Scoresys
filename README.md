@@ -2,7 +2,6 @@
 
 A modern, responsive web application for tracking badminton scores in both singles and doubles matches, following official badminton rules.
 
-![Badminton Score App](https://via.placeholder.com/800x400?text=Badminton+Score+App)
 
 ## Features
 
