@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -10,10 +9,9 @@ interface Score {
 }
 
 interface PlayerPosition {
-  left: number;  // Index of the player in the left position
-  right: number; // Index of the player in the right position
-  server: number; // Index of the player currently serving
-  receiver: number; // Index of the player currently receiving
+  playerIndex: number;  // Index of the player (0-3)
+  court: 'left' | 'right';  // Which court they're standing on
+  role: 'server' | 'receiver' | 'none';  // Current role
 }
 
 interface ScoreboardProps {
@@ -28,94 +26,247 @@ export const Scoreboard = ({ matchType, players, onMatchEnd }: ScoreboardProps) 
     { points: 0, sets: [] }
   ]);
   const [currentSet, setCurrentSet] = useState(1);
-  const [serving, setServing] = useState(0); // Team serving
+  const [servingTeam, setServingTeam] = useState(0); // Team currently serving (0 or 1)
   const [matchWinner, setMatchWinner] = useState<number | null>(null);
   
-  // For doubles: track player positions and servers
-  const [teamPositions, setTeamPositions] = useState<[PlayerPosition, PlayerPosition]>([
-    { left: 1, right: 0, server: 0, receiver: 2 },  // Team 0: player0 right (server), player1 left
-    { left: 3, right: 2, server: 2, receiver: 0 }   // Team 1: player2 right (receiver), player3 left
+  // Track all players' positions and roles
+  const [playerPositions, setPlayerPositions] = useState<PlayerPosition[]>([
+    // Team 0 players
+    { playerIndex: 0, court: 'right', role: 'server' },    // Player 0 (right court, serving)
+    { playerIndex: 1, court: 'left', role: 'none' },       // Player 1 (left court)
+    // Team 1 players
+    { playerIndex: 2, court: 'right', role: 'receiver' },  // Player 2 (right court, receiving)
+    { playerIndex: 3, court: 'left', role: 'none' }        // Player 3 (left court)
   ]);
 
-  // Initialize server based on set
+  // Initialize player positions and roles based on set
   useEffect(() => {
-    if (currentSet === 1) {
-      setServing(0); // First team serves in first set
-      
-      // Initialize positions for first set
-      setTeamPositions([
-        { left: 1, right: 0, server: 0, receiver: 2 },
-        { left: 3, right: 2, server: 2, receiver: 0 }
-      ]);
-    } else if (currentSet === 2) {
-      setServing(1); // Second team serves in second set
-      
-      // Initialize positions for second set
-      setTeamPositions([
-        { left: 1, right: 0, server: 0, receiver: 2 },
-        { left: 3, right: 2, server: 2, receiver: 0 }
-      ]);
-    } else if (currentSet === 3) {
+    // Reset positions for new set
+    initializePositionsForSet(currentSet);
+  }, [currentSet]);
+
+  /**
+   * Initialize player positions and roles for a new set
+   * @param setNumber The set number (1, 2, or 3)
+   */
+  const initializePositionsForSet = (setNumber: number) => {
+    let newServingTeam: number;
+    
+    // Determine which team serves first based on set number
+    if (setNumber === 1) {
+      newServingTeam = 0; // First team serves in first set
+    } else if (setNumber === 2) {
+      newServingTeam = 1; // Second team serves in second set
+    } else {
       // In the third set, the team that won more sets serves first
       const team0Sets = scores[0].sets.filter(set => set === 1).length;
       const team1Sets = scores[1].sets.filter(set => set === 1).length;
-      setServing(team0Sets > team1Sets ? 0 : 1);
-      
-      // Initialize positions for third set
-      setTeamPositions([
-        { left: 1, right: 0, server: 0, receiver: 2 },
-        { left: 3, right: 2, server: 2, receiver: 0 }
-      ]);
+      newServingTeam = team0Sets > team1Sets ? 0 : 1;
     }
-  }, [currentSet, scores]);
-
-  // Function to rotate players in doubles
-  const rotatePlayersAfterServeChange = (team: number) => {
-    if (matchType !== 'doubles') return;
     
-    setTeamPositions(prev => {
-      const newPositions = [...prev] as [PlayerPosition, PlayerPosition];
-      
-      // Swap positions within the team that's now serving
-      const temp = newPositions[team].left;
-      newPositions[team].left = newPositions[team].right;
-      newPositions[team].right = temp;
-      
-      // Update server and receiver
-      newPositions[team].server = newPositions[team].right;
-      newPositions[1-team].receiver = newPositions[1-team].right;
-      
-      return newPositions;
-    });
-  };
-
-  // Function to update player positions in doubles after scoring
-  const updatePositionsAfterScoring = (scoringTeam: number) => {
-    if (matchType !== 'doubles') return;
+    setServingTeam(newServingTeam);
     
-    // Only rotate positions if the serving team scores
-    if (scoringTeam === serving) {
-      if (scores[scoringTeam].points % 2 === 1) {
-        // If points are odd, switch positions within serving team
-        setTeamPositions(prev => {
-          const newPositions = [...prev] as [PlayerPosition, PlayerPosition];
-          const temp = newPositions[scoringTeam].left;
-          newPositions[scoringTeam].left = newPositions[scoringTeam].right;
-          newPositions[scoringTeam].right = temp;
-          
-          // Update server to be the one on the right
-          newPositions[scoringTeam].server = newPositions[scoringTeam].right;
-          return newPositions;
-        });
+    // Initialize player positions based on which team is serving
+    const newPositions: PlayerPosition[] = [
+      // Team 0 players
+      { 
+        playerIndex: 0, 
+        court: 'right', 
+        role: newServingTeam === 0 ? 'server' : 'none' 
+      },
+      { 
+        playerIndex: 1, 
+        court: 'left', 
+        role: 'none' 
+      },
+      // Team 1 players
+      { 
+        playerIndex: 2, 
+        court: 'right', 
+        role: newServingTeam === 1 ? 'server' : 'receiver' 
+      },
+      { 
+        playerIndex: 3, 
+        court: 'left', 
+        role: 'none' 
       }
-    } else {
-      // If receiving team scores, they become the serving team
-      setServing(scoringTeam);
-      rotatePlayersAfterServeChange(scoringTeam);
+    ];
+    
+    // If team 1 is serving, update receiver to be player 0
+    if (newServingTeam === 1) {
+      newPositions[0].role = 'receiver';
+      newPositions[2].role = 'server';
     }
+    
+    setPlayerPositions(newPositions);
   };
 
-  // Main function for updating score when a team wins a point
+  /**
+   * Get the current server's player index
+   * @returns The player index of the current server
+   */
+  const getCurrentServer = (): number => {
+    const serverPlayer = playerPositions.find(p => p.role === 'server');
+    return serverPlayer ? serverPlayer.playerIndex : -1;
+  };
+
+  /**
+   * Get the current receiver's player index
+   * @returns The player index of the current receiver
+   */
+  const getCurrentReceiver = (): number => {
+    const receiverPlayer = playerPositions.find(p => p.role === 'receiver');
+    return receiverPlayer ? receiverPlayer.playerIndex : -1;
+  };
+
+  /**
+   * Get which team a player belongs to
+   * @param playerIndex Player index (0-3)
+   * @returns Team index (0 or 1)
+   */
+  const getPlayerTeam = (playerIndex: number): number => {
+    return Math.floor(playerIndex / 2);
+  };
+
+  /**
+   * Determine which court a player should be on based on team's score
+   * @param teamIndex The team index (0 or 1)
+   * @returns Which court the server should be on ('right' for even score, 'left' for odd)
+   */
+  const getServerCourtBasedOnScore = (teamIndex: number): 'left' | 'right' => {
+    const teamScore = scores[teamIndex].points;
+    return teamScore % 2 === 0 ? 'right' : 'left';
+  };
+
+  /**
+   * Get the opposite court side
+   * @param court Current court ('left' or 'right')
+   * @returns Opposite court ('right' or 'left')
+   */
+  const getOppositeCourt = (court: 'left' | 'right'): 'left' | 'right' => {
+    return court === 'left' ? 'right' : 'left';
+  };
+
+  /**
+   * Update all player positions and roles after a point is scored
+   * @param scoringTeam The team that scored the point
+   */
+  const updatePositionsAfterScoring = (scoringTeam: number): void => {
+    if (matchType !== 'doubles') {
+      // For singles, just update the serving team
+      if (scoringTeam !== servingTeam) {
+        setServingTeam(scoringTeam);
+      }
+      return;
+    }
+    
+    // For doubles, apply the proper rules
+    const currentServingTeam = servingTeam;
+    const currentServerIndex = getCurrentServer();
+    const currentReceiverIndex = getCurrentReceiver();
+    
+    // Create a copy of positions to modify
+    const newPositions = [...playerPositions];
+    
+    if (scoringTeam === currentServingTeam) {
+      // Case 1: Serving team scored - same player continues serving but switches sides
+      
+      // Find the current server and their teammate
+      const currentServer = newPositions.find(p => p.role === 'server')!;
+      const currentServerTeammate = newPositions.find(p => 
+        getPlayerTeam(p.playerIndex) === getPlayerTeam(currentServer.playerIndex) && 
+        p.playerIndex !== currentServer.playerIndex
+      )!;
+      
+      // Switch server and teammate's courts
+      const oldServerCourt = currentServer.court;
+      currentServer.court = currentServerTeammate.court;
+      currentServerTeammate.court = oldServerCourt;
+      
+      // Find the current receiver and their teammate
+      const currentReceiver = newPositions.find(p => p.role === 'receiver')!;
+      const receiverTeammate = newPositions.find(p => 
+        getPlayerTeam(p.playerIndex) === getPlayerTeam(currentReceiver.playerIndex) && 
+        p.playerIndex !== currentReceiver.playerIndex
+      )!;
+      
+      // Calculate new server court based on updated score
+      const newScore = scores[currentServingTeam].points + 1;
+      const newServerCourt = newScore % 2 === 0 ? 'right' : 'left';
+      
+      // Ensure server is on the correct court based on the new score
+      if (currentServer.court !== newServerCourt) {
+        // Need to swap server with teammate
+        const tempCourt = currentServer.court;
+        currentServer.court = currentServerTeammate.court;
+        currentServerTeammate.court = tempCourt;
+      }
+      
+      // Adjust receiver side based on server position
+      currentReceiver.court = getOppositeCourt(currentServer.court);
+      
+      // Serving team remains the same
+      // setServingTeam(currentServingTeam); // No change needed
+      
+    } else {
+      // Case 2: Receiving team scored - they become the new serving team
+      const newServingTeam = 1 - currentServingTeam;
+      setServingTeam(newServingTeam);
+      
+      // Find the current receiver (who becomes the new server)
+      const currentReceiver = newPositions.find(p => p.role === 'receiver')!;
+      const receiverTeammate = newPositions.find(p => 
+        getPlayerTeam(p.playerIndex) === getPlayerTeam(currentReceiver.playerIndex) && 
+        p.playerIndex !== currentReceiver.playerIndex
+      )!;
+      
+      // Find the current server (who becomes the new receiver)
+      const currentServer = newPositions.find(p => p.role === 'server')!;
+      const serverTeammate = newPositions.find(p => 
+        getPlayerTeam(p.playerIndex) === getPlayerTeam(currentServer.playerIndex) && 
+        p.playerIndex !== currentServer.playerIndex
+      )!;
+      
+      // Calculate new server court based on team's score
+      const newScore = scores[newServingTeam].points + 1;
+      const newServerCourt = newScore % 2 === 0 ? 'right' : 'left';
+      
+      // Reset roles
+      currentServer.role = 'none';
+      serverTeammate.role = 'none';
+      currentReceiver.role = 'none';
+      receiverTeammate.role = 'none';
+      
+      // According to rules, the player who did NOT serve last becomes the new server
+      // This means the teammate of the previous receiver becomes the server
+      receiverTeammate.role = 'server';
+      currentServer.role = 'receiver';
+      
+      // Ensure server is on the correct court based on score
+      if (receiverTeammate.court !== newServerCourt) {
+        // Need to swap positions
+        const tempCourt = receiverTeammate.court;
+        receiverTeammate.court = currentReceiver.court;
+        currentReceiver.court = tempCourt;
+      }
+      
+      // Ensure receiver is on the opposite court from server
+      if (currentServer.court !== getOppositeCourt(receiverTeammate.court)) {
+        // Need to swap positions with teammate
+        const tempCourt = currentServer.court;
+        currentServer.court = serverTeammate.court;
+        serverTeammate.court = tempCourt;
+      }
+    }
+    
+    // Update player positions
+    setPlayerPositions(newPositions);
+  };
+
+  /**
+   * Update the score and player positions when a team scores
+   * @param team The team that scored (0 or 1)
+   */
   const updateScore = (team: number) => {
     if (matchWinner !== null) return;
     
@@ -170,38 +321,84 @@ export const Scoreboard = ({ matchType, players, onMatchEnd }: ScoreboardProps) 
     updatePositionsAfterScoring(team);
   };
 
-  // Handle when a specific player scores (for doubles mode)
+  /**
+   * Handle a player scoring a point
+   * @param playerIndex The player who scored (0-3)
+   */
   const handlePlayerScore = (playerIndex: number) => {
-    // Determine which team the player belongs to
-    const team = matchType === 'singles' 
-      ? playerIndex 
-      : Math.floor(playerIndex / 2);
-    
-    updateScore(team);
-  };
-
-  // Get current player position name
-  const getPlayerPosition = (playerIndex: number): string => {
-    if (matchType === 'singles') return '';
-    
-    const team = Math.floor(playerIndex / 2);
-    const teamPosition = teamPositions[team];
-    
-    if (teamPosition.left === playerIndex) return '(Left)';
-    if (teamPosition.right === playerIndex) return '(Right)';
-    return '';
-  };
-  
-  // Determine if a player is currently serving
-  const isPlayerServing = (playerIndex: number): boolean => {
     if (matchType === 'singles') {
-      return playerIndex === serving;
+      // For singles, just update the score for the player's team
+      updateScore(playerIndex);
     } else {
-      const team = Math.floor(playerIndex / 2);
-      return team === serving && teamPositions[team].server === playerIndex;
+      // For doubles, determine which team the player belongs to
+      const team = getPlayerTeam(playerIndex);
+      
+      // Update the score
+      updateScore(team);
     }
   };
 
+  /**
+   * Get the current court side label for a player
+   * @param playerIndex The player index (0-3)
+   * @returns Court side label
+   */
+  const getPlayerCourtLabel = (playerIndex: number): string => {
+    if (matchType === 'singles') return '';
+    
+    const playerPos = playerPositions.find(p => p.playerIndex === playerIndex);
+    if (!playerPos) return '';
+    
+    return `(${playerPos.court === 'left' ? 'Left' : 'Right'} Court)`;
+  };
+
+  /**
+   * Check if a player is currently serving
+   * @param playerIndex The player index (0-3)
+   * @returns True if the player is serving
+   */
+  const isPlayerServing = (playerIndex: number): boolean => {
+    if (matchType === 'singles') {
+      return playerIndex === servingTeam;
+    } else {
+      const playerPos = playerPositions.find(p => p.playerIndex === playerIndex);
+      return playerPos?.role === 'server';
+    }
+  };
+
+  /**
+   * Check if a player is currently receiving
+   * @param playerIndex The player index (0-3)
+   * @returns True if the player is receiving
+   */
+  const isPlayerReceiving = (playerIndex: number): boolean => {
+    if (matchType === 'singles') {
+      return playerIndex === (1 - servingTeam);
+    } else {
+      const playerPos = playerPositions.find(p => p.playerIndex === playerIndex);
+      return playerPos?.role === 'receiver';
+    }
+  };
+
+  /**
+   * Get the court side the server is currently on
+   * @returns 'Right' or 'Left'
+   */
+  const getServerCourtSide = (): string => {
+    if (matchType === 'singles') {
+      const score = scores[servingTeam].points;
+      return score % 2 === 0 ? 'Right' : 'Left';
+    } else {
+      const serverPlayer = playerPositions.find(p => p.role === 'server');
+      return serverPlayer?.court === 'right' ? 'Right' : 'Left';
+    }
+  };
+
+  /**
+   * Get team name display
+   * @param index The team index (0 or 1)
+   * @returns Team display name
+   */
   const getTeamName = (index: number) => {
     if (matchType === 'singles') {
       return players[index];
@@ -213,10 +410,15 @@ export const Scoreboard = ({ matchType, players, onMatchEnd }: ScoreboardProps) 
     <div className="w-full max-w-2xl space-y-6">
       <div className="grid grid-cols-2 gap-4">
         {[0, 1].map(team => (
-          <Card key={team} className={`p-6 ${serving === team ? 'ring-2 ring-primary' : ''}`}>
+          <Card key={team} className={`p-6 ${servingTeam === team ? 'ring-2 ring-green-500 border-green-500' : ''}`}>
             <div className="space-y-4">
               <div className="text-center">
                 <h2 className="text-xl font-semibold mb-2">{getTeamName(team)}</h2>
+                {servingTeam === team && (
+                  <div className="text-xs text-green-600 font-bold mb-1">
+                    SERVING TEAM ({getServerCourtSide()} Court)
+                  </div>
+                )}
                 <div className="text-5xl font-bold">{scores[team].points}</div>
               </div>
               
@@ -256,12 +458,21 @@ export const Scoreboard = ({ matchType, players, onMatchEnd }: ScoreboardProps) 
                 <div className="space-y-2">
                   {[team * 2, team * 2 + 1].map(playerIndex => (
                     <div key={playerIndex} className="flex items-center justify-between">
-                      <div>
+                      <div className="flex-1">
                         <span>{players[playerIndex]}</span>
                         <span className="ml-2 text-sm text-muted-foreground">
-                          {getPlayerPosition(playerIndex)}
-                          {isPlayerServing(playerIndex) ? ' (Serving)' : ''}
+                          {getPlayerCourtLabel(playerIndex)}
                         </span>
+                        {isPlayerServing(playerIndex) && (
+                          <span className="ml-2 text-sm font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded">
+                            SERVING
+                          </span>
+                        )}
+                        {isPlayerReceiving(playerIndex) && (
+                          <span className="ml-2 text-sm font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded">
+                            RECEIVING
+                          </span>
+                        )}
                       </div>
                       <Button
                         size="sm"
@@ -283,7 +494,7 @@ export const Scoreboard = ({ matchType, players, onMatchEnd }: ScoreboardProps) 
         <div className="text-center">
           <Button
             variant="outline"
-            onClick={() => setServing(prev => 1 - prev)}
+            onClick={() => setServingTeam(prev => 1 - prev)}
           >
             Change Server
           </Button>
